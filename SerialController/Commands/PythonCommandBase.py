@@ -601,7 +601,10 @@ class ImageProcPythonCommand(PythonCommand):
         src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY) if use_gray else src
 
         if len(crop) == 4:
-            src = src[crop[1] : crop[3], crop[0] : crop[2]]
+            src = src[crop[1]: crop[3], crop[0]: crop[2]]
+        # canvasにトリミング範囲を表示
+        addx = 0
+        addy = 0
 
         template = cv2.imread(
             _get_template_filespec(template_path),
@@ -624,9 +627,13 @@ class ImageProcPythonCommand(PythonCommand):
         if show_value:
             print(template_path + " ZNCC value: " + str(max_val))
 
-        top_left = max_loc
-        bottom_right = (top_left[0] + w + 1, top_left[1] + h + 1)
         tag = str(time.perf_counter()) + str(random.random())
+        if crop != []:
+            self.gui.ImgRect(crop[0], crop[1], crop[2], crop[3], outline="orange", tag=tag, ms=ms)
+            addx = crop[0]
+            addy = crop[1]
+        top_left = (max_loc[0]+addx, max_loc[1]+addy)
+        bottom_right = (top_left[0] + w + 1, top_left[1] + h + 1)
         if max_val >= threshold:
             if self.gui is not None and show_position:
                 # self.gui.delete("ImageRecRect")
