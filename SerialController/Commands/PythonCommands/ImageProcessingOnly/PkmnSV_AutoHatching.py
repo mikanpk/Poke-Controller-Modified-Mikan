@@ -2,74 +2,25 @@
 # -*- coding: utf-8 -*-
 """
 色タマゴ孵化(SV)_v4.0 Release.2025/5/XX by mikan
-# 改修内容
+# おもな改修内容
   - コードの整理、Extension版での動作確認
+  - 画像認識処理の変更（位置や数を取得できるように拡張）
   - LINE Notice廃止に伴う機能の削除
 """
 import datetime
 from .ImageProcPythonCommandAddin import ImageProcPythonCommandAddin
 from Commands.Keys import Button, Direction, Stick
 
-# コード概要 ==================================================================
-#   <00>手持ちのタマゴ数確認処理の実行
-#       タマゴ数0       <1>へ
-#       タマゴ数0以外   <2>へ
-#   <01>ピクニック処理の実行
-#       プレイヤーの位置を初期化する（そらをとぶ）
-#       "きじゅん"ボックスにいる親ポケモンを手持ちに入れる
-#       キャンプ開始
-#          タマゴパワー付与のための料理を行う
-#          指定個数のタマゴを取得するまで待機（初期値30個＝1BOX分）
-#       "たまご"ボックスからタマゴを手持ちに移動、<2>へ
-#   <02>タマゴ孵化処理の実行
-#       プレイヤーの位置を初期化する（そらをとぶ）
-#       手持ちにあるタマゴがすべて孵化するまで走る
-#       孵化したポケモンを、"たまご"ボックスに移動する
-#       "たまご"ボックス内にたまごがあれば手持ちに移動する
-#       "たまご"ボックスからタマゴがなくなったら、<3>へ
-#   <03>孵化結果の確認
-#       "たまご"ボックス内を順番に確認
-#           色違いの場合、色違いありフラグを立てる
-#       色違いありフラグが立って入れば逃がす処理を実行
-#       色違いがいればレポートを書く
-#   <7> リセット
-# 事前設定 ====================================================================
-#   ニックネーム設定     <OFF>
-#   オートセーブ        <OFF>
-#   スタート位置        <ゼロゲート>
-#   ボックス表示        <ジャッジ>
-#   サンドイッチ材料    <スーパーピーナッツバターサンド>複数個分
-#   スタート時手持ち    孵化要員1匹のみ（特性ほのおのからだ等）
-#   ボックス配置:       [きじゅん][たまご][任意]の順で横並びにする
-#     「きじゅん」ボックス
-#         ・親ポケモンを置くボックス
-#         ・背景はデフォルトのもの
-#         ・ボックス左端列の1列目1行目と2列目（複数匹可）に親ポケモンを配置
-#     「たまご」ボックス
-#         ・タマゴを置くボックスなのでポケモンを置かないこと
-#         ・背景はデフォルトのもの
-#         ・「きじゅん」ボックスの右横に配置する
-#     良個体・色違いを置くボックス
-#         ・色違い、良個体を見つけた時に移動するためのボックス
-#         ・背景はデフォルトのもの
-#         ・「たまご」ボックスの右横に配置する
-# ◆開始時は、たまごボックスが開く状態でボックスを閉じておくとよい
-# ◆タマゴ取得後から開始する場合
-#     手持ちを孵化要員1匹（特性ほのおのからだ等）+タマゴにするとタマゴ取得処理をスキップできる。
-#     ボックスを開いたときにタマゴがある状態にしたうえで、
-#     孵化したいタマゴをボックス内の左上から詰めておいておくとそのボックス内のタマゴを自動で孵化する。
-
-
 class SV_HatchingShiny(ImageProcPythonCommandAddin):
 
-    NAME = "タマゴ孵化(SV)"
+    NAME = "SVタマゴ孵化"
 
     # 画面トリミング範囲の定義 [左上x,左上y,右下x,右下y]
     # 画像認識の際に、特定のUI要素だけを切り出して判定するための座標です。
-    CROPAREA_MINIMAP_N      = [1060, 485, 1280, 650]    # ミニマップの範囲
+    CROPAREA_MINIMAP      = [1060, 485, 1280, 650]    # ミニマップの範囲
     CROPAREA_MASSAGE        = [325, 525, 955, 650]      # メッセージの範囲
     CROPAREA_XMENU_PARTY    = [50, 105, 375, 720]       # Xメニューで手持ちポケモンが表示される範囲
-    CROPAERA_BOX_TITLE      = [0, 0, 80, 50]            # ボックスを開いているかを確認するためのXマークの位置
+    CROPAERA_BOX_BUTTON     = [0, 0, 80, 50]            # ボックスを開いているかを確認するためのXマークの位置
     CROPAREA_BOX_LV         = [830, 1, 1279, 100]       # ボックス内でレベル表示がある範囲
     CROPAREA_BOX_INBOX      = [280, 125, 810, 560]      # ボックス内のセル部分
     CROPAREA_BOX_STATUS     = [830, 1, 1279, 720]       # ボックス右側の詳細情報表示範囲
@@ -82,6 +33,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
     # 使用画像一覧
     # 使用している画像は以下のみです
     # 差し替える場合は個々の値を確認
+    PATH_BOX_BUTTON_X           = "pkmnSV_AutoHatching_img/box_button_x.png"
     PATH_BOX_COMMAND_YES        = "pkmnSV_AutoHatching_img/box_command_yes.png"
     PATH_BOX_CURSOR_BG          = "pkmnSV_AutoHatching_img/box_cursor_bg.png"
     PATH_BOX_EGG                = "pkmnSV_AutoHatching_img/box_egg.png"
@@ -95,13 +47,12 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
     PATH_BOX_STATUS_31          = "pkmnSV_AutoHatching_img/box_status_31.png"
     PATH_BOX_STATUS_LEVEL       = "pkmnSV_AutoHatching_img/box_status_lv.png"
     PATH_BOX_STATUS_SHINY       = "pkmnSV_AutoHatching_img/box_status_shiny.png"
-    PATH_BOX_TITLE              = "pkmnSV_AutoHatching_img/box_title.png"
     PATH_BOX_UNDERCOMANDMENU_CATCHINGPKMN   = "pkmnSV_AutoHatching_img/box_undercommandmenu_catchingpkmn.png"
     PATH_BOX_UNDERCOMANDMENU_JUDGEMODE      = "pkmnSV_AutoHatching_img/box_undercommandmenu_judgemode.png"
     PATH_FIELD_MINIMAP          = "pkmnSV_AutoHatching_img/field_minimap.png"
     PATH_MESSAGE_HATCHING       = "pkmnSV_AutoHatching_img/message_hatching.png"
     PATH_MESSAGE_WINDOW         = "pkmnSV_AutoHatching_img/message_window.png"
-    PATH_PICNIC_COMMAND_YPUSH                     = "pkmnSV_AutoHatching_img/picnic_command_y.png"
+    PATH_PICNIC_BUTTON_YPUSH                     = "pkmnSV_AutoHatching_img/picnic_command_y.png"
     PATH_PICNIC_COMMAND_YES                 = "pkmnSV_AutoHatching_img/picnic_command_yes.png"
     PATH_PICNIC_MESSAGE_BASKET_CHECK        = "pkmnSV_AutoHatching_img/picnic_message_basket_check.png"
     PATH_PICNIC_MESSAGE_BASKET_EGG_GET      = "pkmnSV_AutoHatching_img/picnic_message_basket_egg_get.png.png"
@@ -136,7 +87,8 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
         self.max_egg = 30                   # タマゴ取得数（最大1BOX=30）
         self.max_shiny = 10                 # 色違いが何回出たら停止するか
         self.statuscheck_flag = False       # ステータスの確認実施をするか
-        self.status = [                     # ステータスの確認実施をするときに、残しておきたい個体値 [H,A,B,C,D,S]（0、31、99=任意）
+        self.status = [                     # ステータスの確認実施をするときに、残しておきたい個体値
+            # [H,A,B,C,D,S]（0、31、-1=任意）
             [31, 31, 31, 31, 31, 31],       # 6Vの例
             [31, 0, 31, 31, 31, 31],        # 5V（A抜）の例
             [-1, 0, -1, -1, -1, -1]         # A抜の例
@@ -158,17 +110,18 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
         while True:
 
             dt_now = datetime.datetime.now()
-            print(f"------------ {dt_now.strftime('%Y/%m/%d %H:%M:%S')} 色違い{self.total_shiny}/{self.max_shiny}")
+            print(f"--- {dt_now.strftime('%Y/%m/%d %H:%M:%S')} ---")
+            print(f"- 色違い{self.total_shiny}/{self.max_shiny}")
 
             match progress_status:
 
                 case 99:
-                    print(f"<{progress_status}>ソフトを再起動")
+                    print(f"## {progress_status} ソフトを再起動")
                     self.reboot_soft()
                     progress_status = 0
 
                 case 0:
-                    print(f"<{progress_status}>手持ちのタマゴ有無を確認")
+                    print(f"## {progress_status} 手持ちのタマゴ有無を確認")
                     partyEggs = self.xmenu_eggs_count()
                     if partyEggs == 0:
                         progress_status = 1
@@ -176,7 +129,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
                         progress_status = 3
 
                 case 1:
-                    print(f"<{progress_status}>手持ちを親に変更し、ピクニック 色違い{self.total_shiny}/{self.max_shiny}")
+                    print(f"## {progress_status} 手持ちを親に変更し、ピクニック 色違い{self.total_shiny}/{self.max_shiny}")
                     if self.changeparty_parent_pull()  \
                             and self.reset_position_zerogate()\
                             and self.eggs_lay(self.max_egg) \
@@ -187,7 +140,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
                         progress_status = 99
 
                 case 2:
-                    print(f"<{progress_status}>ボックス内のタマゴを手持ちに移動 色違い{self.total_shiny}/{self.max_shiny}")
+                    print(f"## {progress_status}> ボックス内のタマゴを手持ちに移動 色違い{self.total_shiny}/{self.max_shiny}")
                     partyEggs = self.changeparty_egg_pull()
                     if partyEggs > 0:
                        progress_status = 3
@@ -229,7 +182,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
         ソフト再起動（ソフトウェアの起動確認メッセージ対応）
         """
         # ソフトを終了
-        self.press(Button.HOME, 0.1, wait=2)
+        self.press(Button.HOME, 0.1, wait=1.8)
         self.press(Button.X, 0.1, wait=1)
         self.press(Button.A, 0.1, wait=4)
         self.press(Button.A, 0.1, wait=4)
@@ -268,7 +221,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
         bool : True ミニマップ（プレーヤーマーカー）あり
                False 表示なし
         """
-        return self.isContainTemplate(self.PATH_FIELD_MINIMAP, crop=self.CROPAREA_MINIMAP_N)
+        return self.isContainTemplate(self.PATH_FIELD_MINIMAP, crop=self.CROPAREA_MINIMAP)
 
     def field_return(self) -> bool:
         """
@@ -346,7 +299,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
         # リトライ用
         for _ in range(0, 2):
             # ボックスが開いている場合終了
-            if self.isContainTemplate(self.PATH_BOX_TITLE, crop=self.CROPAERA_BOX_TITLE, threshold=0.9):
+            if self.isContainTemplate(self.PATH_BOX_BUTTON_X, crop=self.CROPAERA_BOX_BUTTON, threshold=0.9):
                 break
             # ボックスが開いていない場合は、ボックスを開くためXメニューを開く
             self.xmenu_open()
@@ -466,7 +419,7 @@ class SV_HatchingShiny(ImageProcPythonCommandAddin):
             print("[eggs_lay]ERROR：バスケットからのタマゴ取得失敗")
             return False
         # ピクニック終了
-        if self.picnic_close():
+        if not self.picnic_close():
             print("[eggs_lay]ERROR：ピクニックのクローズ失敗")
             return False
         print("[eggs_lay]END")
