@@ -11,27 +11,28 @@ import os as os
 
 def non_max_suppression(boxes, scores, overlap_thresh=0, sort_by_distance=True):
     """
-    Non Maximum Suppression (NMS) を行う。
-    画像認識などで複数の矩形（バウンディングボックス）が検出されたとき、
-    重なりが大きいものをまとめて、最もスコアの高いものだけを残す処理です。
-    例えば、同じ物体を複数回検出してしまった場合に、
-    1つだけに絞り込むために使います。
+    複数の検出領域から最適な領域を選択する関数（Non Maximum Suppression）
+
+    同じ物体を複数回検出した場合に、重なり合う検出領域をまとめて
+    最も確度の高い検出結果だけを残すための処理を行います。
 
     Parameters
     ----------
-    boxes : numpy array of shape (N, 4)
-        検出された矩形群（各矩形は [x1, y1, x2, y2] の形式）
-    scores : numpy array of shape (N,)
-        各矩形のスコア（信頼度や類似度など）
-    overlap_thresh : float, default=0
-        重なりの閾値（0～1）。この値より重なりが大きい場合、スコアの低い方を除去します。
-    sort_by_distance : bool, default=True
-        Trueなら座標 (0,0) に近い順にソート、Falseならスコアの高い順（降順）にソート
+    boxes: numpy array (N, 4)
+        検出された矩形の座標情報 [x1, y1, x2, y2]
+    scores: numpy array (N,)
+        各矩形の検出スコア（確度）
+    overlap_thresh: float
+        重なり具合の閾値（0～1）。この値より重なりが大きい場合、
+        スコアの低い方の矩形を除去します
+    sort_by_distance: bool
+        True: 座標(0,0)からの距離順にソート
+        False: スコアの高い順にソート
 
     Returns
     -------
-    numpy array of shape (M, 4)
-        NMS 後に残った矩形群（整数型）
+    numpy array (M, 4)
+        選択された矩形の座標情報のリスト
     """
     # 入力のboxesをfloat型に変換して計算しやすくする
     boxes = boxes.astype("float")
@@ -91,32 +92,32 @@ def non_max_suppression(boxes, scores, overlap_thresh=0, sort_by_distance=True):
         sorted_indices = np.argsort(selected_scores)[::-1]
         return selected_boxes[sorted_indices]
 
+
 def create_hue_mask(hsv, hue, salute, value, tolerance=30):
     """
-    色マスク作成関数
-    指定したHSV値（色相・彩度・明度）と許容幅（tolerance）に基づき、
-    画像から特定の色だけを抽出するためのマスク画像を作ります。
-    例えば「赤っぽい部分だけを抽出したい」などの用途で使います。
-    HSV色空間は色相(Hue)・彩度(Saturation)・明度(Value)で色を表現します。
+    指定した色の範囲のみを抽出するマスク画像を作成する関数
+
+    HSV色空間（色相・彩度・明度）を使用して、特定の色の範囲だけを
+    抽出するためのマスク（白黒画像）を作成します。
+    例：赤色の物体だけを検出したい場合などに使用します。
 
     Parameters
     ----------
-    hsv : numpy.ndarray
-        入力のHSV画像（cv2.cvtColor()などで変換済み）
-    hue : int or float
-        中心となる色相値（0～255の整数）
-    salute : int
-        中心となる彩度（0～255の整数）
-    value  : int
-        中心となる明度（0～255の整数）
-    tolerance : int
-        許容幅（±の範囲、例:30）
+    hsv: numpy array
+        HSV色空間に変換された入力画像
+    hue: int
+        抽出したい色の色相値（0～255）
+    salute: int
+        抽出したい色の彩度値（0～255）
+    value: int
+        抽出したい色の明度値（0～255）
+    tolerance: int
+        色の許容範囲（±この値の範囲を許容）
 
     Returns
     -------
-    mask : numpy.ndarray
-        指定色の範囲だけが255（白）、それ以外が0（黒）のマスク画像。
-        赤色など色相が0付近でラップする場合は2つの範囲を合成します。
+    mask: numpy array
+        指定した色範囲が白（255）、それ以外が黒（0）のマスク画像
     """
     # HSVでの下限値・上限値を計算
     lower_hue = hue - tolerance
@@ -176,90 +177,99 @@ class ImageProcPythonCommandAddin(ImageProcPythonCommand):
         sort_by_distance=True
     ) -> any:
         """
-        現在のスクリーンショットと指定した画像のテンプレートマッチングを行い、
-        閾値以上にマッチした箇所の個数を戻り値とします。
-        色の違いを考慮しないのであればパフォーマンスの点からuse_grayをTrueにして
-        グレースケール画像を使うことを推奨します。
+        画面内から特定の画像パターンを検索して、その数と位置を返す関数
+
+        指定した画像（テンプレート）と似た部分を画面内から探し、
+        一定以上の類似度を持つ領域の数と座標を返します。
+        複数のポケモンや同じアイテムなどを一度に検出する際に使用します。
 
         Parameters
         ----------
         template_path: str
-            テンプレート画像のパス
+            探したい画像（テンプレート）のファイルパス
         threshold: float
-            類似度の閾値
+            検出する類似度の閾値（0.0～1.0）
         use_gray: bool
-            グレースケール化するかどうか
+            グレースケール画像で比較するかどうか（処理速度向上）
+        use_edge: bool
+            エッジ（輪郭）情報で比較するかどうか
         show_value: bool
-            類似度や検出数を表示するか
+            類似度や検出数を表示するかどうか
         show_position: bool
-            検出位置をcanvasに表示するか
-        show_only_true_rect: bool
-            認識できなかった場合の枠表示方法
-        ms: float
-            枠の表示時間（ミリ秒）
-        crop: List[int]
-            入力画像のトリミング情報
+            検出位置を画面上に表示するかどうか
+        save_debug_img: bool
+            デバッグ用の画像を保存するかどうか
+        ms: int
+            検出位置の表示時間（ミリ秒）
+        crop: list
+            画面の検索範囲を制限する場合の座標 [x1, y1, x2, y2]
+        edgeparam: list
+            エッジ検出時のパラメータ [閾値1, 閾値2]
         mask_path: str
-            マスク画像のパス
-        sort_by_distance : bool
-            結果のソート順を、左上からの座標順にするかどうか
+            マスク画像のファイルパス（特定領域のみ検索する場合）
+        sort_by_distance: bool
+            検出結果を左上からの距離順にソートするかどうか
 
         Returns
         -------
-        count: int
-            閾値以上にマッチした箇所の個数
-        result_boxes: np
-            閾値以上にマッチした箇所の座標配列 [x1, y1, x2, y2]
+        tuple (int, list)
+            検出された領域の数と、各領域の座標情報のリスト
         """
 
-        # 処理結果格納用の配列
-        boxes = []
-        result_boxes = []
-        method = cv2.TM_CCORR_NORMED
+        # 処理結果格納用の配列を初期化
+        boxes = []          # 検出された領域の座標を一時保存
+        result_boxes = []   # 最終的な検出結果の座標を保存
+        method = cv2.TM_CCORR_NORMED  # テンプレートマッチングの手法を指定
 
-        # ゲーム画面の読み取り
+        # 現在の画面をキャプチャして読み込み
         src = self.camera.readFrame()
+        # 必要に応じてグレースケール変換
         src = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY) if use_gray else src
-        # ゲーム画面画像のトリミング
+        # 指定された範囲でトリミング
         if len(crop) == 4:
             src = src[crop[1]: crop[3], crop[0]: crop[2]]
 
-        # テンプレート画像の読み取り
+        # 探したい画像（テンプレート）を読み込み
         template = cv2.imread(
             _get_template_filespec(template_path),
             cv2.IMREAD_GRAYSCALE if use_gray else cv2.IMREAD_COLOR,
         )
-        # テンプレート画像のサイズ取得
+        # テンプレート画像のサイズを取得
         w, h = template.shape[1], template.shape[0]
 
-        # mask画像が引数にある場合、マスク用画像読み込み
+        # マスク画像の処理
         if mask_path == None:
             mask = None
+            # マスクがない場合は相関係数を使用
             method = cv2.TM_CCOEFF_NORMED
         else:
+            # マスク画像を読み込み（グレースケール）
             mask = cv2.imread(_get_template_filespec(mask_path), 0)
 
-        # 画像のエッジ処理・エッジ処理時のmethodパラメータの設定
+        # エッジ検出を使用する場合の処理
         if use_edge:
+            # 画面とテンプレート両方にエッジ検出を適用
             src = cv2.Canny(src, edgeparam[0], edgeparam[1])
             template = cv2.Canny(template, edgeparam[0], edgeparam[1])
-            method = cv2.TM_CCORR_NORMED
+            method = cv2.TM_CCORR_NORMED  # エッジ用のマッチング手法
 
-        # デバッグ用画像を出力
+        # デバッグ用の画像を保存
         cv2.imwrite(_get_template_filespec("debug_isContainTemplateCount_template.png"), template)
         cv2.imwrite(_get_template_filespec("debug_isContainTemplateCount.png"), src)
 
-        # マッチング
+        # テンプレートマッチング実行
         res = cv2.matchTemplate(src, template, method, mask)
+        # マッチング結果の最小値、最大値、その位置を取得
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-        # マッチング結果が閾値以上の場合
+        # マッチング結果が閾値以上の場合の処理
         if max_val >= threshold:
-            # 類似度が threshold 以上の位置及びスコアを取得
+            # 閾値以上の類似度を持つ位置をすべて取得
             positions = np.where(res >= threshold)
             scores = res[positions]
-            # canvasに検出位置を表示するための準備
+            # 検出位置表示用の一意なタグを生成
             tag = str(time.perf_counter()) + str(random.random())
+            # トリミング補正用の値を初期化
             addx = 0
             addy = 0
             # 各要素が (x1, y1, x2, y2) である矩形一覧boxesを作成
@@ -299,82 +309,124 @@ class ImageProcPythonCommandAddin(ImageProcPythonCommand):
         show_only_true_rect=True,
         ms=1000,
         crop=[],
-        min_stats=300,
-        tolerance=20,
+        min_stats=300,  # あると判断する色の面積指定
+        tolerance=20,  # 色の許容度
         use_blur=True
     ) -> any:
+        """
+        指定した画像の色情報を使って、画面内から同じ色の領域を検出する関数
 
-        # 色の許容度 tolerance = 20
+        テンプレート画像の平均的な色（HSV値）を計算し、その色に近い
+        領域を画面内から探し出します。特定の色のオブジェクトを
+        検出したい場合に使用します。
 
-        # ゲーム画面の画像取得
+        引数:
+        template_path: str
+            基準となる画像のファイルパス
+        show_value: bool
+            HSV値を表示するかどうか
+        show_position: bool
+            検出位置を画面上に表示するかどうか
+        show_only_true_rect: bool
+            検出成功時のみ枠を表示するかどうか
+        ms: int
+            検出位置の表示時間（ミリ秒）
+        crop: list
+            画面の検索範囲を制限する場合の座標 [x1, y1, x2, y2]
+        min_stats: int
+            検出と判定する最小の面積（ピクセル数）
+        tolerance: int
+            色の許容範囲（±この値の範囲を許容）
+        use_blur: bool
+            ノイズ除去のためのぼかしを適用するかどうか
+
+        戻り値:
+        list or None
+            検出成功時: [x, y, 幅, 高さ, 重心x, 重心y]
+            検出失敗時: None
+        """
+
+        # 画面をキャプチャして読み込み
         src = self.camera.readFrame()
-        # トリミング
+        # 指定範囲でトリミング
         if len(crop) == 4:
             src = src[crop[1]: crop[3], crop[0]: crop[2]]
-        # 輝度にのみヒストグラム平坦化を適用
-        # BGR => YUV(YCbCr)
+
+        # 画像の前処理（見やすくするための補正）
+        # まずBGRからYUV色空間に変換（輝度と色情報を分離）
         src_yuv = cv2.cvtColor(src, cv2.COLOR_BGR2YUV)
-        # claheオブジェクトを生成
+        # 輝度のヒストグラム平坦化用のオブジェクトを作成
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        # 輝度にのみヒストグラム平坦化
+        # 輝度チャンネルのみヒストグラム平坦化を適用（コントラスト改善）
         src_yuv[:, :, 0] = clahe.apply(src_yuv[:, :, 0])
-        # YUV => BGR
+        # YUVからBGRに戻す
         src_bgr = cv2.cvtColor(src_yuv, cv2.COLOR_YUV2BGR)
-        # 平滑化フィルタを適用
+
+        # ノイズ除去のためのぼかし処理
         if use_blur:
-            # カーネルの縦横(X,Y)のサイズのタプルで処理
+            # 5x5ピクセルの範囲で平均化
             src_bgr = cv2.blur(src_bgr, (5, 5))
-        # BGRからHSVに変換
+
+        # 色検出しやすいようにHSV色空間に変換
         src_hsv = cv2.cvtColor(src_bgr, cv2.COLOR_BGR2HSV)
 
-        # templateからHSV平均値を取得
-        # flattenで一次元化しmeanで平均を取得
+        # 基準となる画像を読み込んでHSV平均値を計算
         template = cv2.imread(_get_template_filespec(template_path))
         templateHsv = cv2.cvtColor(template, cv2.COLOR_BGR2HSV)
-        hue = templateHsv.T[0].flatten().mean()
-        salute = templateHsv.T[1].flatten().mean()
-        value = templateHsv.T[2].flatten().mean()
+        # 各チャンネル（色相、彩度、明度）の平均値を計算
+        hue = templateHsv.T[0].flatten().mean()    # 色相（色合い）
+        salute = templateHsv.T[1].flatten().mean() # 彩度（鮮やかさ）
+        value = templateHsv.T[2].flatten().mean()  # 明度（明るさ）
 
-        # HSV価からマスクを作成
+        # 計算したHSV値を使ってマスク画像を作成
         mask = create_hue_mask(src_hsv, hue=hue, salute=salute, value=value, tolerance=tolerance)
 
+        # HSV値を表示（デバッグ用）
         if show_value:
-            print("Hue: %.2f" % (hue))
-            print("Salute: %.2f" % (salute))
-            print("Value: %.2f" % (value))
-        # デバッグ用
+            print("Hue(色相): %.2f" % (hue))
+            print("Salute(彩度): %.2f" % (salute))
+            print("Value(明度): %.2f" % (value))
+        # マスク画像を保存（デバッグ用）
         cv2.imwrite(_get_template_filespec("debug_isContainTemplateHSV_mask.png"), mask)
 
-        # 元画像から特定の色を抽出
+        # マスクを使って元画像から特定の色の領域だけを抽出
         masked_img = cv2.bitwise_and(src_bgr, src_bgr, mask=mask)
-        # 連結成分でラベリングする
+
+        # マスク画像内の連結成分を解析（つながっている領域をグループ化）
         num_labels, _, stats, centroids = cv2.connectedComponentsWithStats(mask)
-        # 背景のラベルを削除
+        # 背景ラベル（最初の要素）を削除
         num_labels = num_labels - 1
         stats = np.delete(stats, 0, 0)
         centroids = np.delete(centroids, 0, 0)
-        # ラベルの有無で場合分け
+
+        # 検出された領域が1つ以上ある場合の処理
         if num_labels >= 1:
-            # 最大面積のインデックスを取り出す
+            # 最大面積を持つ領域のインデックスを取得
             max_index = np.argmax(stats[:, 4])
-            # 以下最大面積のラベルについて考える crop[1]: crop[3], crop[0]: crop[2]]
-            x = stats[max_index][0]
-            y = stats[max_index][1]
-            w = stats[max_index][2]
-            h = stats[max_index][3]
-            s = stats[max_index][4]
-            mx = int(centroids[max_index][0])+crop[0]  # 重心のX座標
-            my = int(centroids[max_index][1])+crop[1]  # 重心のY座標
-            # デバッグ用 結果確認用画像の出力
-            cv2.rectangle(masked_img, (x, y), (x+w, y+h), (255, 0, 255))  # ラベルを四角で囲む
+
+            # 最大領域の情報を取得
+            x = stats[max_index][0]      # 左上のx座標
+            y = stats[max_index][1]      # 左上のy座標
+            w = stats[max_index][2]      # 幅
+            h = stats[max_index][3]      # 高さ
+            s = stats[max_index][4]      # 面積（ピクセル数）
+            # 重心座標を計算（トリミング補正も加える）
+            mx = int(centroids[max_index][0])+crop[0]  # x座標
+            my = int(centroids[max_index][1])+crop[1]  # y座標
+
+            # デバッグ用に検出領域を四角で囲んだ画像を保存
+            cv2.rectangle(masked_img, (x, y), (x+w, y+h), (255, 0, 255))
             cv2.imwrite(_get_template_filespec("debug_isContainTemplateHSV.png"), masked_img)
-            # トリミングがあればその分の値を修正
+
+            # トリミングされている場合は座標を補正
             if len(crop) == 4:
                 x = x+crop[0]
                 y = y+crop[1]
+
+            # 検出情報を表示（デバッグ用）
             if show_value:
-                # 重心を表示
-                print("重心:%d,%d 面積:%d x:%d,y:%d,w:%d,h:%d" % (mx, my, s, x, y, w, h))
+                print("重心:(x=%d,y=%d) 面積:%d ピクセル" % (mx, my, s))
+                print("検出領域: x=%d, y=%d, 幅=%d, 高さ=%d" % (x, y, w, h))
             # GUIへの出力
             tag = str(time.perf_counter()) + str(random.random())
             if crop != []:
@@ -393,6 +445,5 @@ class ImageProcPythonCommandAddin(ImageProcPythonCommand):
             else:
                 # 面積を表示
                 print("指定の面積未満:%d < %d" % (s, min_stats))
-        # ----------------------------------------------
         print("目標物が見当たりません！！")
         return None
