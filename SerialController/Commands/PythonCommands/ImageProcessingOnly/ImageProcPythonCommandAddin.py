@@ -9,6 +9,26 @@ import random
 import os as os
 
 
+CAPTURE_DIR = "./Captures/"
+
+
+def _get_save_filespec(filename: str) -> str:
+    """
+    画像ファイルの保存パスを取得する。
+
+    入力が絶対パスの場合は、`CAPTURE_DIR`につなげずに返す。
+
+    Args:
+        filename (str): 保存名／保存パス
+
+    Returns:
+        str: _description_
+    """
+    if os.path.isabs(filename):
+        return filename
+    else:
+        return os.path.join(CAPTURE_DIR, filename)
+
 def non_max_suppression(boxes, scores, overlap_thresh=0, sort_by_distance=True):
     """
     複数の検出領域から最適な領域を選択する関数（Non Maximum Suppression）
@@ -254,8 +274,8 @@ class ImageProcPythonCommandAddin(ImageProcPythonCommand):
             method = cv2.TM_CCORR_NORMED  # エッジ用のマッチング手法
 
         # デバッグ用の画像を保存
-        cv2.imwrite(_get_template_filespec("debug_isContainTemplateCount_template.png"), template)
-        cv2.imwrite(_get_template_filespec("debug_isContainTemplateCount.png"), src)
+        cv2.imwrite(_get_save_filespec("debug_isContainTemplateCount_template.png"), template)
+        cv2.imwrite(_get_save_filespec("debug_isContainTemplateCount.png"), src)
 
         # テンプレートマッチング実行
         res = cv2.matchTemplate(src, template, method, mask)
