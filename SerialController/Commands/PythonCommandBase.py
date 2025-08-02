@@ -18,7 +18,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 
 import Settings
-from LineNotify import Line_Notify
+#from LineNotify import Line_Notify
 from DiscordNotify import Discord_Notify
 from Commands import CommandBase
 from .Keys import Button, Direction, KeyPress
@@ -578,7 +578,7 @@ class ImageProcPythonCommand(PythonCommand):
         self.gresult = cv2.cuda_GpuMat()
 
     def __post_init__(self):
-        self.Line = Line_Notify(self.camera)
+        #self.Line = Line_Notify(self.camera)
         self.Discord = Discord_Notify(camera=self.camera)
 
     # Judge if current screenshot contains an image using template matching

@@ -4,7 +4,7 @@ import cv2
 import tkinter as tk
 
 from KeyConfig import PokeKeycon
-from LineNotify import Line_Notify
+#from LineNotify import Line_Notify
 from get_pokestatistics import GetFromHomeGUI
 import DiscordNotify
 from loguru import logger
